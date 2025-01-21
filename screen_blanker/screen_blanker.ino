@@ -1,6 +1,7 @@
 /*
 Code originally written by Ali Haydarogly, February 2022, for Adafruit Grand Central M4 board
 Adapted for Teensy 4.0 by Michael Krumin, March 2023
+Adapted for gated PMTs by James Rowland Jan 2025
 */
 
 // pin connected to the screen backlight
@@ -26,50 +27,41 @@ int sys_clock = 6e8;
 // So we need to wait until the end of that line to turn on the screens
 // For 12 kHz scanners, line time is ~41.67 us
 
-// My scanner is 7910 Hz, my line period is 63.17 us my spatial fill fraction is 0.9 
+// JR: My scanner is 7910 Hz, my line period is 63.17 us my spatial fill fraction is 0.9 
+// JR: This is the original setting for 12 kHz scanners
 // int delay_rising = 21000; //21e3 at 600MHz == 35 microseconds 
 // int delay_falling = 21300;
 
-// computed ratio
+// This is the delays computed for a 7910 Hz scanner
 int delay_rising = 31835; 
 int delay_falling = 32290;
-
-// random attempts
-// int delay_rising = 5000; 
-// int delay_falling = 5300;
 
 // number of ticks in a pulse triggered by 
 // a rising/falling edge
 // This will depend on the scanners frequency and the temporal fill fraction of the acquisition parameters
 // Spatial fill fraction of 0.9 --> temporal 0.713 --> 11 microseconds is just right for a single U-Turn duration
 
+// JR This is the original number of ticks
 // int pulse_ticks_rising = 6600; 
 // int pulse_ticks_falling = 6600;
 
-// computer ratio
+// JR: increased for my slower scanner (this still may be slightly too long, but we lose a 
+// negligable amount of image at the edge)
 int pulse_ticks_rising = 10000; 
 int pulse_ticks_falling = 10000;
-
-// int pulse_ticks_rising = 30000; 
-// int pulse_ticks_falling = 30000;
-
-
 
 
 int current_time_r, current_time_f, current_time, previous_time;
 int next_rising_pulse_start_tick;
 int next_falling_pulse_start_tick;
-// int current_pulse_start_tick;
 int current_pulse_end_tick;
 int pulse_on = 0;
 int diff = 0;
      
 void setup() {
-//Serial.begin(115200);
   ARM_DEMCR |= ARM_DEMCR_TRCENA;
   ARM_DWT_CTRL |= ARM_DWT_CTRL_CYCCNTENA;
   pulse_on = 0;
-  //max_delay = max(delay_rising, delay_falling) + pulse_ticks + 1000;
   pinMode(pulse_pin, OUTPUT);
   pinMode(interrupt_pin_rising, INPUT_PULLUP);
   pinMode(interrupt_pin_falling, INPUT_PULLUP);
