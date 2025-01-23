@@ -5,7 +5,9 @@ Adapted for gated PMTs by James Rowland Jan 2025
 */
 
 // pin connected to the screen backlight
-const byte pulse_pin = 13;
+const byte screen_pin = 13;
+// pin connected to the pmt gate
+const byte gate_pin = 14;
 
 // rising and falling interrupt pins should both be tied 
 // to the same sync signal from the resonant mirrors
@@ -50,11 +52,16 @@ int delay_falling = 32290;
 int pulse_ticks_rising = 10000; 
 int pulse_ticks_falling = 10000;
 
+// My PMT takes 1 us to fully switch from 0 -> 100% (600 ticks at 600 MHz) tinyurl.com/msj8b2j6
+// TODO: check that this works when disabling the gate (assumes that the screens have a similar switching time)
+const int gate_switiching_time = 600;
 
 int current_time_r, current_time_f, current_time, previous_time;
 int next_rising_pulse_start_tick;
 int next_falling_pulse_start_tick;
 int current_pulse_end_tick;
+// Probably unneccesary
+int gate_on = 0;
 int pulse_on = 0;
 int diff = 0;
      
@@ -62,7 +69,9 @@ void setup() {
   ARM_DEMCR |= ARM_DEMCR_TRCENA;
   ARM_DWT_CTRL |= ARM_DWT_CTRL_CYCCNTENA;
   pulse_on = 0;
-  pinMode(pulse_pin, OUTPUT);
+  gate_on = 0;
+  pinMode(screen_pin, OUTPUT);
+  pinMode(gate_pin, OUTPUT);
   pinMode(interrupt_pin_rising, INPUT_PULLUP);
   pinMode(interrupt_pin_falling, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(interrupt_pin_rising), pulse_rising, RISING);
@@ -91,12 +100,17 @@ void loop() {
   current_time = ARM_DWT_CYCCNT;
   // if we are in between pulses
   if (pulse_on == 0){
-    // the following if block is repeated twice, once for a rising edge-triggered
-    // pulse and once for a falling edge-triggered pulse. This is so you can set 
-    // different pulse delays/times, and also it can handle the case where the falling edge 
-    // triggered pulse happened after the next rising edge.
+    // check if it is time to turn the gate on (1 µs before the screen)
+    if (check_time(current_time, next_rising_pulse_start_tick - gate_switiching_time)){
+          gate_on = 1;
+          digitalWrite(gate_pin, HIGH);
+      }
+    if (check_time(current_time, next_falling_pulse_start_tick - gate_switiching_time)){
+          gate_on = 1;
+          digitalWrite(gate_pin, HIGH);
+      }
 
-    // check if it is time to turn the pulse on
+    // check if it is time to turn the screen on
     if (check_time(current_time, next_rising_pulse_start_tick)){
           pulse_on = 1;
           // calculate the end time of the pulse
@@ -105,22 +119,26 @@ void loop() {
           // set the next pulse start tick to a large impossible number so it doesn't retrigger another pulse
           // one second from now, should never realistically trigger another pulse while the resonant scanner is running
           next_rising_pulse_start_tick = current_time + sys_clock;
-          digitalWrite(pulse_pin, HIGH);
+          digitalWrite(screen_pin, HIGH);
       }
     if (check_time(current_time, next_falling_pulse_start_tick)){
           pulse_on = 1;
-          //current_pulse_start_tick = current_time;
           current_pulse_end_tick = current_time + pulse_ticks_falling;
           next_falling_pulse_start_tick = current_time + sys_clock;
-          digitalWrite(pulse_pin, HIGH);
+          digitalWrite(screen_pin, HIGH);
       }
   }   
   // if the pulse is currently on
   if (pulse_on == 1){
-    // check if it is time to turn the pulse off
+    // check if it is time to turn the screen off
     if (check_time(current_time, current_pulse_end_tick)){
           pulse_on = 0;
-          digitalWrite(pulse_pin, LOW);
+          digitalWrite(screen_pin, LOW);
+      }
+    // check if it is time to turn the gate off (1 µs after the screen)
+    if (check_time(current_time, current_pulse_end_tick + gate_switiching_time)){
+          gate_on = 0;
+          digitalWrite(gate_pin, LOW);
       }
   }
 }
@@ -130,12 +148,7 @@ void pulse_rising() {
  * Interrupt routine for rising edge. set the next rising pulse start time.
  */
   current_time_r = ARM_DWT_CYCCNT;
-  // Some lines useful for debugging, but they are slowing things down a bit
-  //Serial.print(current_time_r-previous_time);
-  //Serial.print(current_time_r);
-  //Serial.print('\n');
   next_rising_pulse_start_tick = current_time_r + delay_rising;
-  //previous_time = current_time_r;
 }
 void pulse_falling(){
   /*
