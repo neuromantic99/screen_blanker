@@ -54,7 +54,7 @@ int pulse_ticks_falling = 10000;
 
 // My PMT takes 1 us to fully switch from 0 -> 100% (600 ticks at 600 MHz) tinyurl.com/msj8b2j6
 // TODO: check that this works when disabling the gate (assumes that the screens have a similar switching time)
-const int gate_switiching_time = 600;
+const int gate_switiching_time = 500;
 
 int current_time_r, current_time_f, current_time, previous_time;
 int next_rising_pulse_start_tick;
