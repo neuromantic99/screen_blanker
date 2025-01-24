@@ -7,7 +7,7 @@ Adapted for gated PMTs by James Rowland Jan 2025
 // pin connected to the screen backlight
 const byte screen_pin = 13;
 // pin connected to the pmt gate
-const byte gate_pin = 14;
+const byte gate_pin = 17;
 
 // rising and falling interrupt pins should both be tied 
 // to the same sync signal from the resonant mirrors
@@ -62,13 +62,13 @@ int next_falling_pulse_start_tick;
 int current_pulse_end_tick;
 // Probably unneccesary
 int gate_on = 0;
-int pulse_on = 0;
+int screen_on = 0;
 int diff = 0;
      
 void setup() {
   ARM_DEMCR |= ARM_DEMCR_TRCENA;
   ARM_DWT_CTRL |= ARM_DWT_CTRL_CYCCNTENA;
-  pulse_on = 0;
+  screen_on = 0;
   gate_on = 0;
   pinMode(screen_pin, OUTPUT);
   pinMode(gate_pin, OUTPUT);
@@ -99,7 +99,7 @@ int check_time(int current_time, int target_time){
 void loop() {
   current_time = ARM_DWT_CYCCNT;
   // if we are in between pulses
-  if (pulse_on == 0){
+  if (screen_on == 0){
     // check if it is time to turn the gate on (1 µs before the screen)
     if (check_time(current_time, next_rising_pulse_start_tick - gate_switiching_time)){
           gate_on = 1;
@@ -112,7 +112,7 @@ void loop() {
 
     // check if it is time to turn the screen on
     if (check_time(current_time, next_rising_pulse_start_tick)){
-          pulse_on = 1;
+          screen_on = 1;
           // calculate the end time of the pulse
           //current_pulse_start_tick = current_time;
           current_pulse_end_tick = current_time + pulse_ticks_rising;
@@ -122,21 +122,23 @@ void loop() {
           digitalWrite(screen_pin, HIGH);
       }
     if (check_time(current_time, next_falling_pulse_start_tick)){
-          pulse_on = 1;
+          screen_on = 1;
           current_pulse_end_tick = current_time + pulse_ticks_falling;
           next_falling_pulse_start_tick = current_time + sys_clock;
           digitalWrite(screen_pin, HIGH);
       }
   }   
   // if the pulse is currently on
-  if (pulse_on == 1){
+  if (screen_on == 1){
     // check if it is time to turn the screen off
-    if (check_time(current_time, current_pulse_end_tick)){
-          pulse_on = 0;
+    if (check_time(current_time, current_pulse_end_tick - gate_switiching_time)){
+          screen_on = 0;
           digitalWrite(screen_pin, LOW);
-      }
+    }
+  }
+  if (gate_on == 1){
     // check if it is time to turn the gate off (1 µs after the screen)
-    if (check_time(current_time, current_pulse_end_tick + gate_switiching_time)){
+    if (check_time(current_time, current_pulse_end_tick)){
           gate_on = 0;
           digitalWrite(gate_pin, LOW);
       }
